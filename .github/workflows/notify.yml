@@ -1,0 +1,51 @@
+name: notify
+
+# بيشتغل كل ساعة (ببلاش). السكربت بيقرّر لحاله إذا وصل وقت إشعار الصبح.
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'daily = ابعت ملخص التذكيرات هلأ · test = إشعار تجريبي'
+        required: true
+        default: daily
+        type: choice
+        options: [daily, test]
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: notify
+  cancel-in-progress: false
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install
+        run: npm install --no-audit --no-fund --prefix server
+
+      - name: Send notifications
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          RUN_MODE: ${{ github.event_name == 'workflow_dispatch' && inputs.mode || 'auto' }}
+        run: node server/notify.mjs
+
+      # GitHub بيوقف المهام المجدولة إذا ما صار تعديل على المشروع 60 يوم. هالخطوة بتضلها شغّالة.
+      - name: Keep schedule alive
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X PUT "repos/${{ github.repository }}/actions/workflows/notify.yml/enable" || true
