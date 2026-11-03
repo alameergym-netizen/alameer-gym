@@ -1,0 +1,47 @@
+rules_version = '2';
+// قواعد حماية بيانات الأمير جيم: بس الموظفين المفعّلين بيقدروا يشوفوا أو يعدّلوا.
+// انسخ هالملف كامل والصقه بـ Firebase ← Firestore Database ← Rules ← Publish
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function ownerDoc() { return /databases/$(database)/documents/meta/owner; }
+    function staffDoc() { return /databases/$(database)/documents/staff/$(request.auth.uid); }
+    function isOwner() { return signedIn() && exists(ownerDoc()) && get(ownerDoc()).data.uid == request.auth.uid; }
+    function isStaff() { return signedIn() && exists(staffDoc()) && get(staffDoc()).data.active == true; }
+
+    // مين مالك النادي (بيتسجّل مرة وحدة أول تشغيل)
+    match /meta/owner {
+      allow read: if true;
+      allow create: if signedIn() && !exists(ownerDoc()) && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+    // حالة الإشعارات وطلبات التجربة
+    match /meta/{doc} {
+      allow read: if isStaff();
+      allow write: if isStaff() && doc != 'owner';
+    }
+    // حسابات الموظفين: المالك بس بيضيف ويوقف
+    match /staff/{uid} {
+      allow read: if isStaff() || (signedIn() && request.auth.uid == uid);
+      allow create, update: if isOwner();
+      allow delete: if isOwner() && uid != request.auth.uid;
+    }
+    // الأسعار والكباتن والرسائل: الكل بيقرأ، المالك بس بيعدّل
+    match /settings/{doc} {
+      allow read: if isStaff();
+      allow write: if isOwner();
+    }
+    // المشتركين: كل الموظفين بيسجّلوا ويعدّلوا، الحذف للمالك بس
+    match /members/{id} {
+      allow read, create, update: if isStaff();
+      allow delete: if isOwner();
+    }
+    // أجهزة الإشعارات
+    match /pushSubs/{id} {
+      allow read: if isOwner();
+      allow create, update: if isStaff() && request.resource.data.uid == request.auth.uid;
+      allow delete: if isStaff();
+    }
+  }
+}
