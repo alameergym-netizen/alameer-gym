@@ -2,7 +2,7 @@
 
 export const CONFIG = {
   // رقم الإصدار: زيده مع كل تحديث (مثلاً 2.0.1) عشان الأجهزة تعرف إنه في تحديث جديد.
-  version: '2.0.0',
+  version: '2.0.1',
 
   // 1) الصق هون القيم اللي بيعطيك إياها Firebase
   //    (Project settings ← Your apps ← SDK setup and configuration ← Config)

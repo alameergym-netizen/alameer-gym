@@ -44,7 +44,8 @@ async function firebaseStore(CONFIG) {
       return AU.onAuthStateChanged(auth, (u) => {
         if (staffUnsub) { staffUnsub(); staffUnsub = null; }
         if (!u) { cb(null); return; }
-        staffUnsub = F.onSnapshot(F.doc(db, 'staff', u.uid), (snap) => {
+        staffUnsub = F.onSnapshot(F.doc(db, 'staff', u.uid), { includeMetadataChanges: true }, (snap) => {
+          if (snap.metadata.hasPendingWrites) return; // استنى لحد ما السيرفر يأكد الحساب
           if (!snap.exists()) { cb({ uid: u.uid, email: u.email, pending: true }); return; }
           const d = snap.data();
           cb({ uid: u.uid, email: u.email, name: d.name || 'موظف', role: d.role || 'staff', username: d.username || u.email, active: d.active !== false });
@@ -82,7 +83,7 @@ async function firebaseStore(CONFIG) {
         cb(snap.docs.map(d => Object.assign({}, d.data(), { id: d.id })), { fromCache: snap.metadata.fromCache, pending: snap.metadata.hasPendingWrites });
       }, err);
     },
-    watchSettings(cb) { return F.onSnapshot(F.doc(db, 'settings', 'main'), s => cb(s.exists() ? s.data() : null), () => {}); },
+    watchSettings(cb, err) { return F.onSnapshot(F.doc(db, 'settings', 'main'), s => cb(s.exists() ? s.data() : null), err || (() => {})); },
     watchStaff(cb) { return F.onSnapshot(F.collection(db, 'staff'), s => cb(s.docs.map(d => Object.assign({}, d.data(), { uid: d.id }))), () => cb([])); },
     watchMeta(cb) {
       const out = {};

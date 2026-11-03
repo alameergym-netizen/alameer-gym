@@ -159,13 +159,13 @@ async function onUser(u) {
   if (sameUser && S.unsubs.length) { refresh(); return; }
   stopWatchers(); S.uid = u.uid;
   const st_ = S.store;
-  S.unsubs.push(st_.watchMembers((list, meta) => {
+  S.unsubs.push(keepWatching(err => st_.watchMembers((list, meta) => {
     S.members = list.map(prep);
     S.byId = {}; S.members.forEach(m => { S.byId[m.id] = m; });
     S.membersLoaded = true; S.sync = meta || S.sync;
     refresh();
-  }, e => { logErr(e, 'members'); toast(errText(e)); }));
-  S.unsubs.push(st_.watchSettings(d => { S.settings = U.mergeSettings(d); refresh(); }));
+  }, err), 'members'));
+  S.unsubs.push(keepWatching(err => st_.watchSettings(d => { S.settings = U.mergeSettings(d); refresh(); }, err), 'settings'));
   S.unsubs.push(st_.watchMeta(m => { S.meta = Object.assign({}, m); if (S.route && S.route.name === 'dev') refresh(); }));
   if (u.role === 'owner') {
     S.unsubs.push(st_.watchStaff(l => { S.staff = l || []; if (S.route && ['staff', 'settings'].includes(S.route.name)) refresh(); }));
@@ -176,6 +176,21 @@ async function onUser(u) {
   render('tab');
   if (S.route.openNew) setTimeout(() => memberForm(null), 300);
   syncPush();
+}
+// إذا انقطع الاتصال بالبيانات (نت، أو حساب لسا عم يتجهّز) بنرجع نحاول لحالنا
+function keepWatching(start, label) {
+  let alive = true, attempt = 0, un = null;
+  const run = () => {
+    un = start(e => {
+      logErr(e, label);
+      if (!alive) return;
+      attempt++;
+      if (attempt <= 6) setTimeout(() => { if (alive) run(); }, 1500 * attempt);
+      else toast(errText(e));
+    });
+  };
+  run();
+  return () => { alive = false; if (un) try { un(); } catch (e) {} };
 }
 function stopWatchers() { S.unsubs.forEach(f => { try { f(); } catch (e) {} }); S.unsubs = []; }
 function prep(m) { m._n = U.norm(m.name); m._p = U.intlPhone(m.phone).replace(/^962/, ''); return m; }
