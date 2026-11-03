@@ -5,6 +5,7 @@ import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import webpush from 'web-push';
 import { mergeSettings, buildDigest, dateInZone, hourInZone } from '../util.js';
+import { CONFIG } from '../config.js';
 
 const TZ = 'Asia/Amman';
 
@@ -23,7 +24,16 @@ catch (e) { console.error('❌ FIREBASE_SERVICE_ACCOUNT لازم يكون محت
 
 initializeApp({ credential: cert(account) });
 const db = getFirestore();
-webpush.setVapidDetails('mailto:notifications@alameer.gym', need('VAPID_PUBLIC_KEY'), need('VAPID_PRIVATE_KEY'));
+// Keys are cleaned of stray spaces or hidden characters from copy-paste.
+// The public key comes from config.js (the same one the devices subscribe with).
+const clean = s => String(s || '').replace(/[^A-Za-z0-9_-]/g, '');
+const vapidPublic = clean(CONFIG.vapidPublicKey);
+const vapidPrivate = clean(need('VAPID_PRIVATE_KEY'));
+if (vapidPrivate.length !== 43) {
+  console.error('VAPID_PRIVATE_KEY must be 43 characters, got ' + vapidPrivate.length + '. Copy it again from the keys file.');
+  process.exit(1);
+}
+webpush.setVapidDetails('mailto:notifications@alameer.gym', vapidPublic, vapidPrivate);
 
 const mode = (process.env.RUN_MODE || 'auto').trim();   // auto | daily | test
 const now = new Date();
